@@ -49,3 +49,10 @@ CLI em Python (arquivo único `main.py`) que busca emails não lidos no Gmail, g
 - Usar `Text("...", style=f"link {url}")` para link clicável (OSC 8). **Não** usar markup `[link url]...[/link]` — quebra com `MarkupError` no Rich 15.
 - Escapar strings dinâmicas com `rich.markup.escape` antes de meter em markup.
 - `mensagens.json` (~462MB) é legado, não é mais escrito — não carregar/abrir em leitura de teste.
+
+## Regras gerais de desenvolvimento
+
+- Você não pode escrever nenhum código até que tenha escrito um teste de unidade que falhe.
+- Você não pode escrever mais de um teste de unidade do que o necessário para falhar (e não compilar é falhar).
+- Você não pode escrever mais código do que o suficiente para fazor o teste de unidade que falhou passar.
+- Sempre que achar um bug faça um teste que reproduz o bug e que so passa quando o bug não acontecer.

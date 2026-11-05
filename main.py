@@ -384,15 +384,15 @@ def resumir_emails():
         console.print(f"[red]An error occurred: {error}[/red]")
 
 
-opcoes = [("0 - Sair",), ("1 - Resumidor de Emails", resumir_emails)]
+if __name__ == "__main__":
+    opcoes = [("0 - Sair",), ("1 - Resumidor de Emails", resumir_emails)]
 
-for opcao in opcoes:
-    print(opcao[0])
+    for opcao in opcoes:
+        print(opcao[0])
 
-
-while True:
-    i = input()
-    if i == "0":
-        break
-    opcao = int(i)
-    opcoes[opcao][1]()
+    while True:
+        i = input()
+        if i == "0":
+            break
+        opcao = int(i)
+        opcoes[opcao][1]()
