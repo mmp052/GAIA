@@ -40,6 +40,47 @@ def salvar_resumo_dia(dia, resumidos, ignorados, agora=None):
     return nome
 
 
+def _anexar_jsonl(registro, caminho):
+    with open(caminho, "a", encoding="utf-8") as f:
+        f.write(json.dumps(registro, ensure_ascii=False) + "\n")
+
+
+def _carregar_jsonl(limite, caminho):
+    try:
+        with open(caminho, encoding="utf-8") as f:
+            linhas = f.readlines()
+    except OSError:
+        return []
+    registros = []
+    for linha in linhas:
+        linha = linha.strip()
+        if not linha:
+            continue
+        try:
+            registros.append(json.loads(linha))
+        except ValueError:
+            continue
+    if limite:
+        return registros[-limite:]
+    return registros
+
+
+def anexar_monitor_amostra(amostra, caminho="monitor_historico.jsonl"):
+    _anexar_jsonl(amostra, caminho)
+
+
+def carregar_amostras_monitor(limite=30, caminho="monitor_historico.jsonl"):
+    return _carregar_jsonl(limite, caminho)
+
+
+def anexar_log_rotina(registro, caminho="monitor_rotinas.jsonl"):
+    _anexar_jsonl(registro, caminho)
+
+
+def carregar_logs_rotina(limite=20, caminho="monitor_rotinas.jsonl"):
+    return _carregar_jsonl(limite, caminho)
+
+
 def carregar_ultimo_resumo(diretorio="."):
     arquivos = sorted(Path(diretorio).glob("resumo_dia_*.json"), reverse=True)
     for arquivo in arquivos:

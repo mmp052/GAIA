@@ -4,6 +4,344 @@ def test_gaia_config_expoe_n_frases():
     assert N_FRASES_RESUMO == 3
 
 
+def test_gaia_config_expoe_monitor():
+    from gaia import config
+
+    assert config.MONITOR_INTERVALO_TELA == 1.0
+    assert config.MONITOR_INTERVALO_FUNDO == 2.0
+    assert config.MONITOR_THRESHOLD_AVISO == 80
+    assert config.MONITOR_THRESHOLD_CRITICO == 90
+    assert config.MONITOR_JANELA_SPARKLINE == 30
+
+
+def test_monitor_coletar_metricas_com_fakes():
+    from gaia.core.monitor import coletar_metricas
+
+    resultado = coletar_metricas(
+        get_cpu=lambda: 32.5,
+        get_mem=lambda: {"percent": 45.0, "used_bytes": 4500, "total_bytes": 10000, "available_bytes": 5500},
+        get_proc=lambda: {"cpu_percent": 2.1, "memory_mb": 48.0},
+        agora="2026-11-09T10:00:00",
+    )
+    assert resultado["cpu_percent"] == 32.5
+    assert resultado["ram_percent"] == 45.0
+    assert resultado["ram_usada_bytes"] == 4500
+    assert resultado["ram_total_bytes"] == 10000
+    assert resultado["ram_disponivel_bytes"] == 5500
+    assert resultado["gaia_cpu_percent"] == 2.1
+    assert resultado["gaia_ram_mb"] == 48.0
+    assert resultado["timestamp"] == "2026-11-09T10:00:00"
+
+
+def test_monitor_buffer_acumula_e_retorna_ultimas():
+    from gaia.core.monitor import Monitor
+
+    mon = Monitor()
+    assert mon.ultima_amostra() is None
+    assert mon.ultimas_amostras(5) == []
+
+    for i in range(5):
+        mon.registrar({"cpu_percent": float(i * 10), "ram_percent": float(i * 5), "timestamp": f"t{i}"})
+
+    assert mon.ultima_amostra()["cpu_percent"] == 40.0
+    ultimas = mon.ultimas_amostras(2)
+    assert [a["cpu_percent"] for a in ultimas] == [30.0, 40.0]
+    assert mon.historico_cpu(5) == [0.0, 10.0, 20.0, 30.0, 40.0]
+    assert mon.historico_ram(5) == [0.0, 5.0, 10.0, 15.0, 20.0]
+
+
+def test_storage_anexa_amostra_jsonl_e_carrega_ultimas(tmp_path, monkeypatch):
+    import json
+
+    from gaia.core.storage import anexar_monitor_amostra, carregar_amostras_monitor
+
+    monkeypatch.chdir(tmp_path)
+    anexar_monitor_amostra({"timestamp": "t1", "cpu_percent": 10.0, "ram_percent": 20.0})
+    anexar_monitor_amostra({"timestamp": "t2", "cpu_percent": 30.0, "ram_percent": 40.0})
+    anexar_monitor_amostra({"timestamp": "t3", "cpu_percent": 50.0, "ram_percent": 60.0})
+
+    linhas = (tmp_path / "monitor_historico.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert len(linhas) == 3
+    assert json.loads(linhas[0])["cpu_percent"] == 10.0
+
+    ultimas = carregar_amostras_monitor(2)
+    assert [a["cpu_percent"] for a in ultimas] == [30.0, 50.0]
+    assert carregar_amostras_monitor(5) and len(carregar_amostras_monitor(5)) == 3
+
+
+def test_storage_anexa_log_rotina_jsonl(tmp_path, monkeypatch):
+    import json
+
+    from gaia.core.storage import anexar_log_rotina, carregar_logs_rotina
+
+    monkeypatch.chdir(tmp_path)
+    anexar_log_rotina({"rotina": "resumir_emails", "duracao_s": 1.5})
+    anexar_log_rotina({"rotina": "resumir_emails", "duracao_s": 2.5})
+
+    linhas = (tmp_path / "monitor_rotinas.jsonl").read_text(encoding="utf-8").strip().splitlines()
+    assert json.loads(linhas[1])["duracao_s"] == 2.5
+    logs = carregar_logs_rotina(1)
+    assert len(logs) == 1 and logs[0]["duracao_s"] == 2.5
+
+
+def test_ui_monitor_sparkline_e_cor_threshold():
+    from gaia.ui.monitor_render import cor_por_threshold, gerar_sparkline
+
+    # sparkline: valores crescentes produzem blocos crescentes
+    spark = gerar_sparkline([0, 50, 100])
+    assert "▁" in spark and "█" in spark
+    assert gerar_sparkline([]) == ""
+
+    # thresholds: só visual — <80 normal, 80-90 amarelo, >=90 vermelho
+    assert cor_por_threshold(10) == "green"
+    assert cor_por_threshold(80) == "yellow"
+    assert cor_por_threshold(85) == "yellow"
+    assert cor_por_threshold(90) == "red"
+    assert cor_por_threshold(95) == "red"
+
+
+def test_ui_monitor_render_painel_mostra_cpu_ram_e_gaia():
+    from gaia.ui.monitor_render import render_monitor
+
+    amostra = {
+        "cpu_percent": 32.5,
+        "ram_percent": 45.0,
+        "ram_usada_bytes": 4500,
+        "ram_total_bytes": 10000,
+        "gaia_cpu_percent": 2.1,
+        "gaia_ram_mb": 48.0,
+        "timestamp": "2026-11-09T10:00:00",
+    }
+    painel = render_monitor(amostra, [10, 20, 32.5], [30, 40, 45.0])
+    texto = painel.renderable
+    # painel deve ser Panel com conteúdo textual contendo os números
+    assert "32.5%" in texto.plain or "32.5" in texto.plain
+    assert "45.0%" in texto.plain or "45.0" in texto.plain
+    assert "GAIA" in texto.plain
+    assert "2.1%" in texto.plain or "2.1" in texto.plain
+
+
+def test_ui_monitor_render_sem_markup_cru():
+    from gaia.ui.monitor_render import render_monitor
+
+    amostra = {
+        "cpu_percent": 32.5,
+        "ram_percent": 45.0,
+        "ram_usada_bytes": 4500,
+        "ram_total_bytes": 10000,
+        "gaia_cpu_percent": 2.1,
+        "gaia_ram_mb": 48.0,
+        "timestamp": "2026-11-09T10:00:00",
+    }
+    painel = render_monitor(amostra, [10, 20, 32.5], [30, 40, 45.0])
+    plain = painel.renderable.plain
+    # markup deve ser interpretado, não aparecer cru ("bold green" etc.)
+    assert "[bold" not in plain
+    assert "[/]" not in plain
+    assert "bold" not in plain.lower().replace("monitor", "")
+    assert "32.5%" in plain
+
+
+def test_ui_monitor_sparkline_largura_fixa():
+    from gaia.ui.monitor_render import gerar_sparkline
+
+    # largura fixa: painel não cresce a cada segundo
+    assert gerar_sparkline([100], largura=3) == "▁▁█"
+    assert len(gerar_sparkline([0, 100], largura=5)) == 5
+    assert len(gerar_sparkline([10, 20, 30], largura=3)) == 3
+    # sem largura, compat: lista vazia continua ""
+    assert gerar_sparkline([]) == ""
+
+
+def test_monitor_registrar_execucao_rotina_grava_log(tmp_path, monkeypatch):
+    from gaia.core.monitor import registrar_execucao_rotina
+    from gaia.core.storage import carregar_logs_rotina
+
+    monkeypatch.chdir(tmp_path)
+    registrar_execucao_rotina("resumir_emails", duracao_s=1.5, cpu_s=0.8, ram_mb=52.0)
+
+    logs = carregar_logs_rotina(1)
+    assert logs[0]["rotina"] == "resumir_emails"
+    assert logs[0]["duracao_s"] == 1.5
+    assert logs[0]["cpu_s"] == 0.8
+    assert logs[0]["ram_mb"] == 52.0
+    assert "timestamp" in logs[0]
+
+
+def test_monitor_medir_rotina_mede_e_registra(tmp_path, monkeypatch):
+    from gaia.core import monitor
+    from gaia.core.storage import carregar_logs_rotina
+
+    monkeypatch.chdir(tmp_path)
+
+    @monitor.medir_rotina("resumir_emails")
+    def rotina_falsa():
+        return "ok"
+
+    assert rotina_falsa() == "ok"
+    logs = carregar_logs_rotina(1)
+    assert logs[0]["rotina"] == "resumir_emails"
+    assert logs[0]["duracao_s"] >= 0
+
+
+def test_main_mostrar_banner_inclui_monitor_quando_amostra():
+    import io
+
+    from rich.console import Console
+
+    import main as gaia_main
+
+    arquivo = io.StringIO()
+    console = Console(file=arquivo, force_terminal=False, width=200)
+    amostra = {
+        "cpu_percent": 32.5,
+        "ram_percent": 45.0,
+        "ram_usada_bytes": 4500,
+        "ram_total_bytes": 10000,
+        "gaia_cpu_percent": 2.1,
+        "gaia_ram_mb": 48.0,
+        "timestamp": "2026-11-09T10:00:00",
+    }
+    gaia_main.mostrar_banner(console, amostra=amostra, historico_cpu=[10, 20, 32.5], historico_ram=[30, 40, 45.0])
+    saida = arquivo.getvalue()
+    assert "Monitor" in saida or "CPU" in saida or "GAIA" in saida
+    assert "32.5" in saida
+
+
+def test_main_criar_monitor_esta_ligado_com_sampler():
+    import main as gaia_main
+
+    mon = gaia_main.criar_monitor()
+    assert mon.intervalo == 2.0
+    assert mon.salvar_fn is not None
+    assert mon.ultima_amostra() is None
+    mon.registrar({"cpu_percent": 10.0, "ram_percent": 20.0, "timestamp": "t"})
+    assert mon.ultima_amostra()["cpu_percent"] == 10.0
+
+
+def test_main_resumir_emails_e_scheduler_mendem_rotina(tmp_path, monkeypatch):
+    import main as gaia_main
+    from gaia.core.storage import carregar_logs_rotina
+
+    monkeypatch.chdir(tmp_path)
+    chamadas = []
+
+    def fake_impl(**kwargs):
+        chamadas.append(kwargs)
+        return {"dia": None, "resumidos": [], "ignorados": []}
+
+    monkeypatch.setattr(gaia_main, "_resumir_emails_impl", fake_impl)
+
+    assert gaia_main.resumir_emails() == {"dia": None, "resumidos": [], "ignorados": []}
+    tarefa = gaia_main.criar_tarefa_scheduler()
+    tarefa()
+
+    logs = carregar_logs_rotina(5)
+    assert len(logs) == 2
+    assert all(l["rotina"] == "resumir_emails" for l in logs)
+
+
+def test_main_loop_menu_com_monitor_usa_entrada_injetada():
+    import io
+
+    from rich.console import Console
+
+    import main as gaia_main
+    from gaia.core.monitor import Monitor
+    from gaia.ui.menu import Menu
+
+    menu = Menu()
+    menu.registrar("0", "Sair", None)
+    menu.registrar("1", "Resumidor de Emails", lambda: "ok")
+    mon = Monitor()
+    mon.registrar({"cpu_percent": 10.0, "ram_percent": 20.0, "ram_usada_bytes": 1000, "ram_total_bytes": 5000, "gaia_cpu_percent": 1.0, "gaia_ram_mb": 30.0, "timestamp": "t"})
+
+    entradas = iter(["0"])
+    arquivo = io.StringIO()
+    console = Console(file=arquivo, force_terminal=False, width=200)
+    gaia_main.loop_menu_com_monitor(console, menu, mon, entrada=lambda: next(entradas))
+
+    saida = arquivo.getvalue()
+    # sem Live no caminho de teste, mas banner + monitor devem aparecer
+    assert "Monitor" in saida or "CPU" in saida
+
+
+def test_main_loop_menu_aceita_enter_vazio_sem_erro():
+    import io
+
+    from rich.console import Console
+
+    import main as gaia_main
+    from gaia.core.monitor import Monitor
+    from gaia.ui.menu import Menu
+
+    menu = Menu()
+    menu.registrar("0", "Sair", None)
+    menu.registrar("1", "Resumidor de Emails", lambda: "ok")
+    mon = Monitor()
+
+    entradas = iter(["", "0"])
+    arquivo = io.StringIO()
+    console = Console(file=arquivo, force_terminal=False, width=200)
+    gaia_main.loop_menu_com_monitor(console, menu, mon, entrada=lambda: next(entradas))
+
+    saida = arquivo.getvalue()
+    assert "Opção inválida" in saida
+
+
+def test_main_loop_producao_nao_le_input_concorrente_com_live():
+    import pathlib
+
+    texto = pathlib.Path("main.py").read_text(encoding="utf-8")
+    # regressão: ler input em thread enquanto Live redesenha apaga o que o
+    # usuário digita a cada segundo. Produção deve parar o Live e então ler.
+    assert "target=leitor" not in texto
+    assert "fila.get" not in texto
+
+
+def test_main_tecla_para_acao_mapeia_teclas():
+    import main as gaia_main
+
+    assert gaia_main.tecla_para_acao("1") == "executar_1"
+    assert gaia_main.tecla_para_acao("0") == "sair"
+    assert gaia_main.tecla_para_acao("q") == "sair"
+    assert gaia_main.tecla_para_acao("Q") == "sair"
+    assert gaia_main.tecla_para_acao("\x03") == "sair"
+    assert gaia_main.tecla_para_acao("") is None
+    assert gaia_main.tecla_para_acao("\n") is None
+    assert gaia_main.tecla_para_acao("\r") is None
+    assert gaia_main.tecla_para_acao("x") is None
+
+
+def test_main_loop_live_atualiza_sem_input_de_linha_e_sai_no_0():
+    import io
+
+    from rich.console import Console
+
+    import main as gaia_main
+    from gaia.core.monitor import Monitor
+    from gaia.ui.menu import Menu
+
+    menu = Menu()
+    menu.registrar("0", "Sair", None)
+    menu.registrar("1", "Resumidor de Emails", lambda: "ok")
+    mon = Monitor()
+    mon.registrar({"cpu_percent": 10.0, "ram_percent": 20.0, "ram_usada_bytes": 1000, "ram_total_bytes": 5000, "gaia_cpu_percent": 1.0, "gaia_ram_mb": 30.0, "timestamp": "t"})
+
+    teclas = iter([None, None, "0"])
+    chamadas = []
+
+    def ler_tecla_fake(timeout=1.0):
+        chamadas.append(timeout)
+        return next(teclas)
+
+    arquivo = io.StringIO()
+    console = Console(file=arquivo, force_terminal=False, width=200)
+    gaia_main.loop_menu_com_monitor(console, menu, mon, intervalo_tela=0.01, ler_tecla_fn=ler_tecla_fake)
+
+    assert chamadas == [0.01, 0.01, 0.01]
+
+
 def test_blacklist_extrair_email_core():
     from gaia.core.blacklist import extrair_email
 
