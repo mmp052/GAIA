@@ -1,0 +1,1 @@
+N_FRASES_RESUMO = 3
