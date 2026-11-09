@@ -92,6 +92,7 @@ def tecla_para_acao(tecla):
     """Mapeia uma tecla única para ação do menu (sem Enter).
 
     - "1" → executar rotina resumidor
+    - "2" → executar histórico
     - "0"/"q"/"Q"/Ctrl+C → sair
     - Enter/"" /outras → ignorar (None), sem erro.
     """
@@ -99,6 +100,8 @@ def tecla_para_acao(tecla):
         return "sair"
     if tecla == "1":
         return "executar_1"
+    if tecla == "2":
+        return "executar_2"
     return None
 
 
@@ -172,10 +175,17 @@ def mostrar_banner(console=None, amostra=None, historico_cpu=None, historico_ram
         console.print(Panel("Resumo automático pronto! Opção 1 → Abrir último para ver.", title="Resumo automático", border_style="yellow"))
 
 
+def historico():
+    from gaia.routines.historico import mostrar_historico
+
+    return mostrar_historico(console=get_console())
+
+
 def construir_menu():
     menu = Menu()
     menu.registrar("0", "Sair", None)
     menu.registrar("1", "Resumidor de Emails", resumir_emails)
+    menu.registrar("2", "Histórico", historico)
     return menu
 
 
@@ -230,7 +240,7 @@ def loop_menu_com_monitor(console, menu, monitor, intervalo_tela=None, entrada=N
         linhas_menu = "\n".join(f"{tecla} - {titulo}" for tecla, (titulo, _) in menu.itens())
         from rich.text import Text
 
-        partes.append(Text("Pressione a tecla: 1=Resumidor  0/q=Sair (sem Enter)\n" + linhas_menu))
+        partes.append(Text("Pressione a tecla: 1=Resumidor  2=Histórico  0/q=Sair (sem Enter)\n" + linhas_menu))
         if tem_resumo_pendente():
             partes.append(Panel("Resumo automático pronto! Opção 1 → Abrir último para ver.", title="Resumo automático", border_style="yellow"))
         return Group(*partes)
@@ -300,12 +310,13 @@ def loop_menu_com_monitor(console, menu, monitor, intervalo_tela=None, entrada=N
                 acao = tecla_para_acao(tecla)
                 if acao == "sair":
                     return
-                if acao == "executar_1":
+                if acao in ("executar_1", "executar_2"):
+                    tecla = "1" if acao == "executar_1" else "2"
                     try:
-                        funcao = menu.obter("1")
+                        funcao = menu.obter(tecla)
                     except KeyError:
                         continue
-                    titulo = "Resumidor de Emails"
+                    titulo = dict(menu.itens()).get(tecla, (tecla,))[0]
                     live.stop()
                     exibir_cabecalho_rotina(console, titulo)
                     executar_rotina(funcao, titulo, console=console)

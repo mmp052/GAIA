@@ -8,3 +8,4 @@ MONITOR_THRESHOLD_CRITICO = 90  # % — vermelho (só visual)
 MONITOR_JANELA_SPARKLINE = 30  # últimos N pontos desenhados na sparkline
 MONITOR_ARQUIVO_HISTORICO = "monitor_historico.jsonl"
 MONITOR_ARQUIVO_ROTINAS = "monitor_rotinas.jsonl"
+HISTORICO_DIAS = 2  # histórico mostra hoje + ontem

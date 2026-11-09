@@ -12,6 +12,7 @@ def test_gaia_config_expoe_monitor():
     assert config.MONITOR_THRESHOLD_AVISO == 80
     assert config.MONITOR_THRESHOLD_CRITICO == 90
     assert config.MONITOR_JANELA_SPARKLINE == 30
+    assert config.HISTORICO_DIAS == 2
 
 
 def test_monitor_coletar_metricas_com_fakes():
@@ -48,6 +49,131 @@ def test_monitor_buffer_acumula_e_retorna_ultimas():
     assert [a["cpu_percent"] for a in ultimas] == [30.0, 40.0]
     assert mon.historico_cpu(5) == [0.0, 10.0, 20.0, 30.0, 40.0]
     assert mon.historico_ram(5) == [0.0, 5.0, 10.0, 15.0, 20.0]
+
+
+def test_historico_filtra_hoje_e_ontem():
+    from datetime import datetime
+
+    from gaia.core.historico import filtrar_hoje_ontem
+
+    amostras = [
+        {"timestamp": "2026-11-07T10:00:00", "cpu_percent": 1.0},
+        {"timestamp": "2026-11-08T10:00:00", "cpu_percent": 2.0},
+        {"timestamp": "2026-11-09T10:00:00", "cpu_percent": 3.0},
+        {"timestamp": "invalido", "cpu_percent": 9.0},
+    ]
+    filtradas = filtrar_hoje_ontem(amostras, hoje=datetime(2026, 11, 9, 12, 0).date())
+    assert [a["cpu_percent"] for a in filtradas] == [2.0, 3.0]
+
+
+def test_historico_resumo_pico_media():
+    from gaia.core.historico import resumo_historico
+
+    amostras = [
+        {"cpu_percent": 10.0, "ram_percent": 20.0},
+        {"cpu_percent": 30.0, "ram_percent": 40.0},
+        {"cpu_percent": 50.0, "ram_percent": 60.0},
+    ]
+    resumo = resumo_historico(amostras)
+    assert resumo["cpu_pico"] == 50.0
+    assert resumo["cpu_media"] == 30.0
+    assert resumo["ram_pico"] == 60.0
+    assert resumo["ram_media"] == 40.0
+    assert resumo["total"] == 3
+    assert resumo_historico([])["total"] == 0
+
+
+def test_historico_agrega_por_hora():
+    from gaia.core.historico import agregar_por_hora
+
+    amostras = [
+        {"timestamp": "2026-11-09T14:05:00", "cpu_percent": 10.0, "ram_percent": 20.0},
+        {"timestamp": "2026-11-09T14:55:00", "cpu_percent": 30.0, "ram_percent": 40.0},
+        {"timestamp": "2026-11-09T15:10:00", "cpu_percent": 50.0, "ram_percent": 60.0},
+    ]
+    buckets = agregar_por_hora(amostras)
+    assert len(buckets) == 2
+    assert buckets[0]["hora"] == "2026-11-09 14:00"
+    assert buckets[0]["cpu_pico"] == 30.0
+    assert buckets[0]["cpu_media"] == 20.0
+    assert buckets[1]["hora"] == "2026-11-09 15:00"
+
+
+def test_historico_ranking_ordena_por_duracao_total():
+    from gaia.core.historico import ranking_rotinas
+
+    logs = [
+        {"rotina": "resumir_emails", "duracao_s": 10.0, "cpu_s": 2.0, "ram_mb": 50.0},
+        {"rotina": "outra", "duracao_s": 5.0, "cpu_s": 1.0, "ram_mb": 30.0},
+        {"rotina": "resumir_emails", "duracao_s": 20.0, "cpu_s": 4.0, "ram_mb": 60.0},
+    ]
+    ranking = ranking_rotinas(logs)
+    assert ranking[0]["rotina"] == "resumir_emails"
+    assert ranking[0]["execucoes"] == 2
+    assert ranking[0]["duracao_total_s"] == 30.0
+    assert ranking[0]["cpu_total_s"] == 6.0
+
+
+def test_ui_historico_grafico_grande_e_ranking():
+    from gaia.ui.historico_render import render_grafico_grande, render_resumo_historico, render_tabela_ranking
+
+    resumo = {"cpu_pico": 92.0, "cpu_media": 34.0, "ram_pico": 88.0, "ram_media": 51.0, "total": 100}
+    painel = render_resumo_historico(resumo)
+    plain_resumo = painel.renderable.plain
+    assert "92.0%" in plain_resumo or "92" in plain_resumo
+
+    graf = render_grafico_grande([0.0, 50.0, 100.0], titulo="CPU (%)", largura=3, altura=2)
+    plain_graf = graf.renderable.plain
+    assert "█" in plain_graf
+    assert "100%" in plain_graf
+    assert "0%" in plain_graf
+
+    graf_rotulos = render_grafico_grande([10.0, 20.0], titulo="CPU (%)", rotulos=["2026-11-08 00:00", "2026-11-09 12:00"], largura=2, altura=2)
+    plain_rotulos = graf_rotulos.renderable.plain
+    assert "2026-11-08" in plain_rotulos
+    assert "2026-11-09" in plain_rotulos
+
+    vazio = render_grafico_grande([], titulo="CPU (%)", largura=3, altura=2)
+    assert "Sem dados" in vazio.renderable.plain
+
+    ranking = [{"rotina": "resumir_emails", "execucoes": 2, "duracao_total_s": 30.0, "cpu_total_s": 6.0, "ram_media_mb": 55.0}]
+    tabela = render_tabela_ranking(ranking)
+    # Table não tem .plain; verifica via Console para string
+    import io
+
+    from rich.console import Console
+
+    arquivo = io.StringIO()
+    Console(file=arquivo, force_terminal=False, width=200).print(tabela)
+    assert "resumir_emails" in arquivo.getvalue()
+
+
+def test_historico_mostra_tudo_de_uma_vez(tmp_path, monkeypatch):
+    import io
+
+    from rich.console import Console
+
+    from gaia.routines import historico as rotina_historico
+
+    monkeypatch.chdir(tmp_path)
+    # sem arquivos: deve mostrar "Sem dados" e sair sem erro, tudo de uma vez
+    arquivo = io.StringIO()
+    console = Console(file=arquivo, force_terminal=False, width=200)
+    eventos = []
+    console.clear = lambda: eventos.append("clear")
+
+    def pager_proibido(prompt=""):
+        eventos.append("enter")
+        return ""
+
+    resultado = rotina_historico.mostrar_historico(console=console, pager_input=pager_proibido)
+    assert resultado["ranking"] == []
+    assert resultado["resumo"]["total"] == 0
+    # tela única: 1 clear, sem Enter paginando
+    assert eventos == ["clear"]
+    saida = arquivo.getvalue()
+    assert "Sem dados" in saida
+    assert "Ranking de rotinas" in saida
 
 
 def test_storage_anexa_amostra_jsonl_e_carrega_ultimas(tmp_path, monkeypatch):
@@ -303,6 +429,7 @@ def test_main_tecla_para_acao_mapeia_teclas():
     import main as gaia_main
 
     assert gaia_main.tecla_para_acao("1") == "executar_1"
+    assert gaia_main.tecla_para_acao("2") == "executar_2"
     assert gaia_main.tecla_para_acao("0") == "sair"
     assert gaia_main.tecla_para_acao("q") == "sair"
     assert gaia_main.tecla_para_acao("Q") == "sair"
@@ -311,6 +438,14 @@ def test_main_tecla_para_acao_mapeia_teclas():
     assert gaia_main.tecla_para_acao("\n") is None
     assert gaia_main.tecla_para_acao("\r") is None
     assert gaia_main.tecla_para_acao("x") is None
+
+
+def test_main_menu_tem_historico():
+    import main as gaia_main
+
+    menu = gaia_main.construir_menu()
+    assert menu.obter("2") is not None
+    dict(menu.itens())["2"]
 
 
 def test_main_loop_live_atualiza_sem_input_de_linha_e_sai_no_0():
