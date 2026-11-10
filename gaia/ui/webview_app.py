@@ -8,7 +8,6 @@ simples navegação/seleção.
 import platform
 import threading
 import webbrowser
-from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -92,11 +91,6 @@ def _threshold(valor):
     if valor >= MONITOR_THRESHOLD_AVISO:
         return "yellow"
     return "green"
-
-
-def _hora(amostra):
-    bruto = str(amostra.get("timestamp", ""))[:19].replace("T", " ")
-    return bruto[-8:] if bruto else datetime.now().strftime("%H:%M:%S")
 
 
 class GaiaBridge:
@@ -319,7 +313,7 @@ class GaiaBridge:
                 "total": _fmt_bytes(total_bytes),
             },
             "gaia": {"cpu": gaia_cpu, "ram_mb": gaia_ram},
-            "status": f"aviso ≥{MONITOR_THRESHOLD_AVISO} · crítico ≥{MONITOR_THRESHOLD_CRITICO} · {_hora(amostra)}",
+            "status": f"aviso ≥{MONITOR_THRESHOLD_AVISO} · crítico ≥{MONITOR_THRESHOLD_CRITICO}",
         }
 
 

@@ -25,12 +25,20 @@ def _get_mem_real():
     }
 
 
+_proc_cache = None
+
+
 def _get_proc_real():
+    global _proc_cache
     import psutil
 
-    proc = psutil.Process()
+    if _proc_cache is None:
+        _proc_cache = psutil.Process()
+        _proc_cache.cpu_percent(interval=None)  # descarta a 1ª leitura (sempre 0.0)
+    proc = _proc_cache
+    nucleos = psutil.cpu_count(logical=True) or 1
     return {
-        "cpu_percent": float(proc.cpu_percent(interval=None)),
+        "cpu_percent": float(proc.cpu_percent(interval=None)) / nucleos,
         "memory_mb": float(proc.memory_info().rss / 1024 / 1024),
     }
 
