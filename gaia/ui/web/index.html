@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>GAIA</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-theme="dark">
+  <div class="app-shell">
+    <header class="chrome">
+      <div class="brand-mini"><span class="status-dot"></span> GAIA</div>
+      <div class="chrome-actions"><time id="clock">--:--:--</time></div>
+    </header>
+
+    <main>
+      <section class="screen is-active" data-screen="home" aria-label="Núcleo da GAIA">
+        <canvas class="gaia-orb" id="gaia-orb" width="1280" height="720" role="img" aria-label="Núcleo holográfico da GAIA: esfera de energia roxa renderizada com frames Arcade, reativa ao tema musical. As rotinas Resumidor de Emails e Histórico orbitam como planetas; clique nelas ou use as teclas 1 e 2"></canvas>
+        <div class="home-grid">
+          <aside class="hud-panel hud-monitor" aria-label="Monitor de recursos">
+            <div class="hud-label"><span>MONITOR</span><span class="hud-tag">ao vivo</span></div>
+            <div class="monitor-row">
+              <div class="metric"><span class="metric-label">CPU</span><strong id="monitor-cpu">--.-%</strong></div>
+              <canvas class="chart" id="chart-cpu" height="72" aria-label="Histórico de CPU"></canvas>
+            </div>
+            <div class="monitor-row">
+              <div class="metric"><span class="metric-label">RAM</span><strong id="monitor-ram">--.-%</strong></div>
+              <canvas class="chart" id="chart-ram" height="72" aria-label="Histórico de RAM"></canvas>
+            </div>
+            <div class="gaia-line" id="monitor-gaia"><strong>GAIA</strong><span id="monitor-gaia-detail"> cpu --.-% · ram --MB</span></div>
+            <div class="threshold-line" id="monitor-status">aviso ≥80 · crítico ≥90</div>
+          </aside>
+
+          <div class="orb-stage"></div>
+
+        </div>
+      </section>
+
+      <section class="screen" data-screen="resumidor" aria-labelledby="resumidor-title">
+        <div class="screen-inner narrow">
+          <p class="eyebrow">ROTINA</p>
+          <h1 id="resumidor-title">Resumidor de Emails</h1>
+          <p class="lead">Leia o último resumo salvo ou busque mensagens novas. Nada roda sem confirmação.</p>
+          <div class="action-stack">
+            <button class="primary-action" id="ler-ultimo"><span>Ler último resumo</span><small>Abre os emails salvos, um por vez</small></button>
+            <button class="primary-action" id="buscar-novos"><span>Buscar novos agora</span><small>Não-lidos das últimas 24h · NLTK</small></button>
+            <button class="secondary-action" id="voltar-resumidor">Voltar</button>
+          </div>
+          <div class="progress-block" id="busca-estado" hidden><div class="spinner"></div><div><strong id="busca-status">Buscando não-lidos…</strong><p id="busca-detalhe">Conectando ao Gmail</p></div></div>
+          <p class="inline-status" id="resumidor-status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="leitura" aria-labelledby="leitura-title">
+        <div class="screen-inner wide">
+          <div class="screen-heading"><div><p class="eyebrow">RESUMO SALVO</p><h1 id="leitura-title">Ler emails</h1></div><button class="secondary-action compact" id="voltar-leitura">Voltar</button></div>
+          <p class="list-summary" id="lista-resumo">Carregando…</p>
+          <div class="email-list" id="email-list" aria-label="Emails resumidos"></div>
+          <p class="empty-state" id="lista-vazia" hidden>Nenhum resumo salvo ainda. Use “Buscar novos agora”.</p>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="email" aria-labelledby="email-assunto">
+        <div class="screen-inner wide email-reader">
+          <div class="reader-topline"><button class="secondary-action compact" id="voltar-email">Voltar</button><span id="email-contador">1 de 1</span></div>
+          <article class="email-card">
+            <p class="email-from" id="email-de">Remetente</p>
+            <h1 id="email-assunto">Assunto</h1>
+            <p class="email-date" id="email-data">Data</p>
+            <div class="summary-box"><p class="summary-label">Resumo <span id="email-idioma"></span></p><p id="email-resumo"></p></div>
+            <div class="reader-actions"><button class="icon-button nav-button" id="email-anterior" aria-label="Email anterior (p)">←</button><button class="primary-button" id="email-gmail">Abrir no Gmail</button><button class="icon-button nav-button" id="email-proximo" aria-label="Próximo email (n)">→</button></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="screen" data-screen="historico" aria-labelledby="historico-title">
+        <div class="screen-inner wide">
+          <div class="screen-heading"><div><p class="eyebrow">TELEMETRIA</p><h1 id="historico-title">Histórico — hoje + ontem</h1></div><div class="heading-actions"><button class="secondary-action compact" id="reload-historico">Atualizar <kbd>r</kbd></button><button class="secondary-action compact" id="voltar-historico">Voltar</button></div></div>
+          <div class="metric-cards" id="historico-cards"><div class="metric-card"><span>Amostras</span><strong id="historico-amostras">—</strong></div><div class="metric-card"><span>CPU pico / média</span><strong id="historico-cpu">—</strong></div><div class="metric-card"><span>RAM pico / média</span><strong id="historico-ram">—</strong></div></div>
+          <div class="chart-grid"><div class="chart-card"><div class="chart-label"><span>CPU pico / hora</span><span class="subtle">%</span></div><div class="chart-frame"><canvas class="large-chart" id="historico-chart-cpu" height="190" aria-label="Gráfico de CPU com eixos X e Y"></canvas><div class="chart-tooltip" id="chart-tooltip-cpu" hidden></div></div></div><div class="chart-card"><div class="chart-label"><span>RAM pico / hora</span><span class="subtle">%</span></div><div class="chart-frame"><canvas class="large-chart" id="historico-chart-ram" height="190" aria-label="Gráfico de RAM com eixos X e Y"></canvas><div class="chart-tooltip" id="chart-tooltip-ram" hidden></div></div></div></div>
+          <div class="ranking-card"><div class="chart-label"><span>Ranking de rotinas</span><span class="subtle">hoje + ontem</span></div><div id="historico-ranking" class="ranking-list"><p class="subtle">Carregando…</p></div></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer"><span>GAIA · assistente local</span><span><kbd>Esc</kbd> voltar · <kbd>1</kbd>/<kbd>2</kbd> navegar · <kbd>q</kbd> sair</span></footer>
+  </div>
+
+  <div class="modal-backdrop" id="modal-confirmacao" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal">
+      <p class="eyebrow">CONFIRMAÇÃO</p>
+      <h2 id="modal-title">Buscar novos emails?</h2>
+      <p id="modal-detalhe">Busca não-lidos, resume com NLTK e salva o dia. Pode demorar alguns segundos.</p>
+      <div class="modal-actions"><button class="danger-button" id="modal-nao">Não</button><button class="primary-button" id="modal-sim">Sim, executar</button></div>
+    </div>
+  </div>
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="assets/loser_envelope.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

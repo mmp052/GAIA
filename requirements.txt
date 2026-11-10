@@ -1,8 +1,10 @@
-pyfiglet>=1.0
 google-api-python-client>=2.0
 google-auth>=2.0
 google-auth-oauthlib>=1.0
 nltk>=3.8
-rich>=13.0
 psutil>=5.9
 pytest>=8.0
+pywebview>=6.0
+PyQt6; sys_platform == "linux"
+PyQt6-WebEngine; sys_platform == "linux"
+qtpy; sys_platform == "linux"

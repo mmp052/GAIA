@@ -352,6 +352,5 @@ def test_link_email_thread_vazio_usa_msg_id():
 def test_resumir_emails_sem_credenciais_retorna_sem_erro(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     # Sem token.json e sem credentials.json -> não deve levantar exceção
-    main.resumir_emails()
-    captured = capsys.readouterr()
-    assert "credentials.json" in captured.out.lower()
+    resultado = main.resumir_emails()
+    assert resultado == {"dia": None, "resumidos": [], "ignorados": [], "falhas": []}

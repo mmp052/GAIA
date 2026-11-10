@@ -2,3 +2,4 @@
 *.jsonl
 .venv*
 *__pycache__*
+*.mp3
