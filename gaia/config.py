@@ -1,4 +1,9 @@
-N_FRASES_RESUMO = 3
+N_FRASES_RESUMO = 1
+TTS_MODEL = "models/kokoro-v1.0.fp16.onnx"  # Kokoro, offline (domínio público do modelo: Apache-2.0)
+TTS_VOICES = "models/voices-v1.0.bin"
+TTS_VOICE = "pf_dora"  # voz feminina pt-BR do Kokoro
+TTS_LANG = "pt-br"
+TTS_SPEED = 0.9  # 1.0 = normal; menor = mais lento
 
 # Monitoramento em tempo real (Essencial: CPU + RAM + GAIA)
 MONITOR_INTERVALO_TELA = 1.0  # s — refresh do painel na tela principal

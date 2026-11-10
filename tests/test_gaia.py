@@ -1,7 +1,7 @@
 def test_gaia_config_expoe_n_frases():
     from gaia.config import N_FRASES_RESUMO
 
-    assert N_FRASES_RESUMO == 3
+    assert N_FRASES_RESUMO == 1
 
 def test_gaia_config_expoe_monitor():
     from gaia import config
@@ -579,3 +579,70 @@ def test_resumidor_recusa_execucao_concorrente(tmp_path, monkeypatch):
         resumidor_emails._execucao_lock.release()
 
     assert resultado == {"dia": None, "resumidos": [], "ignorados": [], "falhas": []}
+
+
+def test_tts_montar_texto_leitura():
+    from gaia.core import tts
+
+    texto = tts.montar_texto({"de": "Ana <ana@x.com>", "assunto": "Oi", "resumo": "Resumo curto."})
+    assert "Ana" in texto
+    assert "Oi" in texto
+    assert "Resumo curto." in texto
+
+
+def test_tts_falar_usa_kokoro_e_para(monkeypatch, tmp_path):
+    import numpy as np
+
+    from gaia.core import tts
+
+    chamadas = []
+
+    class KokoroFake:
+        def create(self, texto, voice, lang, speed):
+            chamadas.append(("create", texto, voice, lang, speed))
+            return np.zeros(2400, dtype=np.float32), 24000
+
+    class ProcFake:
+        def __init__(self):
+            self.terminado = False
+
+        def terminate(self):
+            self.terminado = True
+            chamadas.append(("terminate",))
+
+        def wait(self, timeout=None):
+            return 0
+
+        def poll(self):
+            return None if not self.terminado else 0
+
+    monkeypatch.setattr(tts, "_carregar_kokoro", lambda: KokoroFake())
+    monkeypatch.setattr(tts.soundfile, "write", lambda *a, **k: chamadas.append(("write",)))
+    monkeypatch.setattr(tts.subprocess, "Popen", lambda cmd, **k: chamadas.append(("popen", cmd)) or ProcFake())
+    tts.falar("olá")
+    import time
+    for _ in range(200):
+        if any(c[0] == "popen" for c in chamadas):
+            break
+        time.sleep(0.01)
+    tts.parar()
+    assert any(c[0] == "create" and c[1] == "olá" and c[2] == "pf_dora" for c in chamadas)
+    assert ("terminate",) in chamadas
+
+
+def test_bridge_sair_para_leitura(monkeypatch):
+    from gaia.core import tts
+    from gaia.ui import webview_app
+
+    parou = []
+    monkeypatch.setattr(tts, "parar", lambda: parou.append(True) or {"falando": False})
+
+    class JanelaFake:
+        def destroy(self):
+            pass
+
+    bridge = webview_app.GaiaBridge()
+    bridge.window = JanelaFake()
+    resultado = bridge.sair()
+    assert resultado["fechando"] is True
+    assert parou == [True]

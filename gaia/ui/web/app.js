@@ -685,6 +685,16 @@ function openEmail(index) {
   showScreen('email');
 }
 
+async function ouvirEmailAtual() {
+  const email = state.resumo?.resumidos?.[state.emailIndex];
+  if (!email) return;
+  try { await api().parar_leitura(); await api().ouvir_email(email.de || '', email.assunto || '', email.resumo || ''); } catch (error) { toast(error.message || String(error), 'GAIA — voz'); }
+}
+
+async function pararLeitura() {
+  try { await api().parar_leitura(); } catch (_) { /* ignora */ }
+}
+
 function renderEmail() {
   const emails = state.resumo?.resumidos || [];
   const email = emails[state.emailIndex];
@@ -788,8 +798,9 @@ function wireEvents() {
   $('#buscar-novos').addEventListener('click', openModal);
   $('#modal-sim').addEventListener('click', iniciarBusca);
   $('#modal-nao').addEventListener('click', closeModal);
-  $('#email-anterior').addEventListener('click', () => { if (state.emailIndex > 0) { state.emailIndex -= 1; renderEmail(); } });
-  $('#email-proximo').addEventListener('click', () => { const total = state.resumo?.resumidos?.length || 0; if (state.emailIndex < total - 1) { state.emailIndex += 1; renderEmail(); } });
+  $('#email-ouvir').addEventListener('click', ouvirEmailAtual);
+  $('#email-anterior').addEventListener('click', () => { pararLeitura(); if (state.emailIndex > 0) { state.emailIndex -= 1; renderEmail(); } });
+  $('#email-proximo').addEventListener('click', () => { pararLeitura(); const total = state.resumo?.resumidos?.length || 0; if (state.emailIndex < total - 1) { state.emailIndex += 1; renderEmail(); } });
   $('#email-gmail').addEventListener('click', async () => {
     const link = state.resumo?.resumidos?.[state.emailIndex]?.link_email;
     if (!link) { toast('Este email não tem link do Gmail.', 'Gmail'); return; }
@@ -808,7 +819,7 @@ function wireEvents() {
     if (key === 'q') { event.preventDefault(); quitApp(); return; }
     if (key === 'escape') {
       event.preventDefault();
-      if (state.screen === 'email') showScreen('leitura');
+      if (state.screen === 'email') { pararLeitura(); showScreen('leitura'); }
       else if (state.screen === 'leitura') showScreen('resumidor');
       else if (state.screen !== 'home') showScreen('home');
       return;
@@ -824,6 +835,7 @@ function wireEvents() {
     } else if (state.screen === 'email') {
       if (key === 'n') $('#email-proximo').click();
       if (key === 'p') $('#email-anterior').click();
+      if (key === 'o') ouvirEmailAtual();
     } else if (state.screen === 'historico' && key === 'r') $('#reload-historico').click();
   });
   window.addEventListener('resize', () => {

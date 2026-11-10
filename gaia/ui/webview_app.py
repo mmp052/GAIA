@@ -223,6 +223,19 @@ class GaiaBridge:
         with self._state_lock:
             return dict(self._historico_state)
 
+    def ouvir_email(self, de, assunto, resumo):
+        """Lê o email em voz alta (background); para a leitura anterior."""
+        from gaia.core import tts
+
+        tts.parar()
+        texto = tts.montar_texto({"de": de, "assunto": assunto, "resumo": resumo})[:2000]
+        return tts.falar(texto)
+
+    def parar_leitura(self):
+        from gaia.core import tts
+
+        return tts.parar()
+
     def abrir_gmail(self, url):
         url = str(url or "")
         try:
@@ -239,6 +252,9 @@ class GaiaBridge:
         return {"aberto": True, "mensagem": ""}
 
     def sair(self):
+        from gaia.core import tts
+
+        tts.parar()
         window = self.window
         if window is None:
             try:
@@ -338,6 +354,12 @@ def criar_app_pywebview(monitor=None, rotinas=None):
     import webview
 
     bridge = GaiaBridge(monitor=monitor, rotinas=rotinas)
+
+    def _parar_voz_ao_fechar():
+        from gaia.core import tts
+
+        tts.parar()
+
     window = webview.create_window(
         WEBVIEW_TITULO,
         url=str(ASSETS / "index.html"),
@@ -347,4 +369,9 @@ def criar_app_pywebview(monitor=None, rotinas=None):
         min_size=(720, 480),
         background_color="#0B1020",
     )
+    try:
+        window.events.closed += _parar_voz_ao_fechar
+    except Exception:
+        # Sem eventos nesta versão do pywebview: sair() ainda para a voz.
+        pass
     return GaiaWebviewApp(bridge=bridge, window=window, webview_module=webview)
